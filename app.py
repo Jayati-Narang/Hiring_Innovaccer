@@ -1,3 +1,5 @@
+from logging import setLoggerClass
+from os import name
 from flask import Flask
 from flask_cors import CORS
 import json
@@ -19,13 +21,15 @@ class Applications:
         self.jobs_list_ids = {}
         self.jobs_list_names = {}
         self.number_of_applicants_per_job_id = {}
+        self.jobIdData = []
 
     def application_processing(self, jobs_list_ids,jobs_list_names, apps):
         self.jobs_list_ids = jobs_list_ids
         self.jobs_list_names = jobs_list_names
         if apps:
             for app in apps:
-                applied_job_id = app['jobs'][0]['id']
+                
+                applied_job_id = app['jobs'][0]['name']
                 if(applied_job_id in self.number_of_applicants_per_job_id.keys()):
                     self.number_of_applicants_per_job_id[applied_job_id] += 1
                 else:
@@ -46,7 +50,21 @@ class Applications:
                         self.active[applied_job_id] += 1
                     else:
                         self.active[applied_job_id] = 1
+
+    def getTable(self, jobs_list_ids, jobs_list_names):
+        for job_id, job_name in zip(jobs_list_ids, jobs_list_names):
+            temp = {'Id': job_id, 'Name':job_name, 'Active': 0, 'Rejected': 0, 'Hired': 0}
+            if(job_name in self.active.keys()):
+                temp['Active'] = self.active[job_name]
+            if(job_name in self.rejected.keys()):
+                temp['Rejected'] = self.rejected[job_name]
+            if(job_name in self.hired.keys()):
+                temp['Hired'] = self.hired[job_name]
+            self.jobIdData.append(temp)
+
     
+                
+
     def getTemplatejson(self):
         final = {}
         for stage in self.stages:
@@ -56,17 +74,26 @@ class Applications:
     def newApplication_processing(self, jobs_ids, jobs_names, apps):
         self.jobs_list_ids = jobs_ids
         self.jobs_list_names = jobs_names
+        # if apps:
+        #     for app in apps:
+        #         applied_job_id = app['jobs'][0]['id']
+
+        #         if(applied_job_id not in self.allData.keys()):
+        #             templatejson = self.getTemplatejson()
+        #             self.allData[applied_job_id] = templatejson
+        #         if(app['current_stage'] and app['status']):
+        #             self.allData[applied_job_id][app['current_stage']['name']][app['status']] += 1
         if apps:
             for app in apps:
-                applied_job_id = app['jobs'][0]['id']
-
-                if(applied_job_id not in self.allData.keys()):
+                applied_job_name = app['jobs'][0]['name']
+                # applied_job_id = app['jobs'][0]
+                if(applied_job_name not in self.allData.keys()):
                     templatejson = self.getTemplatejson()
-                    self.allData[applied_job_id] = templatejson
+                    self.allData[applied_job_name] = templatejson
                 if(app['current_stage'] and app['status']):
-                    self.allData[applied_job_id][app['current_stage']['name']][app['status']] += 1
+                    self.allData[applied_job_name][app['current_stage']['name']][app['status']] += 1
         
-                                
+                          
     
 def create_json(o1):
     myDict = {'jobs_list_IDs': o1.jobs_list_ids,
@@ -93,8 +120,8 @@ def create_json(o1):
 #     o1.application_processing(ids, names, fin)
 #     return create_json(o1)
 
-@app.route('/getData')
-def get_data_application():
+@app.route('/getTable')
+def getTable():
     f = open("applications.txt", "r", encoding='utf-8', errors='ignore')
     l = f.read()
     fin = eval(l)
@@ -111,9 +138,67 @@ def get_data_application():
     names_jobs = list(set(names_jobs))
     o1 = Applications()
     o1.application_processing(ids_jobs, names_jobs, fin)
+    o1.getTable(ids_jobs, names_jobs)
+    # print(o1.jobIdData)
+    return {'data' : o1.jobIdData}
+
+
+@app.route('/getDataFunnel')
+def get_data_application():
+    f = open("applications.txt", "r", encoding='utf-8', errors='ignore')
+    l = f.read()
+    fin = eval(l)
+    f_jobs = open("jobs.txt", "r", encoding='utf-8', errors='ignore')
+    l_jobs = f_jobs.read()
+    fin_jobs = eval(l_jobs)
+    names_jobs = []
+    ids_jobs = []
+    for job in fin_jobs:
+        if(job['status'] == 'open'):
+            names_jobs.append(job['name'])
+            ids_jobs.append(job['id'])
+    ids_jobs = list(set(ids_jobs))
+    names_jobs = list(set(names_jobs))
+    o1 = Applications()
+    # o1.application_processing(ids_jobs, names_jobs, fin)
     o1.newApplication_processing(ids_jobs, names_jobs, fin)
     # return create_json(o1)
     return o1.allData
+
+@app.route('/getData')
+def get_total_application():
+    f = open("applications.txt", "r", encoding='utf-8', errors='ignore')
+    l = f.read()
+    fin = eval(l)
+    f_jobs = open("jobs.txt", "r", encoding='utf-8', errors='ignore')
+    l_jobs = f_jobs.read()
+    fin_jobs = eval(l_jobs)
+    names_jobs = []
+    ids_jobs = []
+    for job in fin_jobs:
+        if(job['status'] == 'open'):
+            names_jobs.append(job['name'])
+            ids_jobs.append(job['id'])
+    ids_jobs = list(set(ids_jobs))
+    names_jobs = list(set(names_jobs))
+    o1 = Applications()
+    o1.application_processing(ids_jobs, names_jobs, fin)
+    return create_json(o1)
+
+@app.route('/getJobNames') 
+def get_job_names():
+    f_jobs = open("jobs.txt", "r", encoding='utf-8', errors='ignore')
+    l_jobs = f_jobs.read()
+    fin_jobs = eval(l_jobs)
+    names_jobs = []
+    ids_jobs = []
+    for job in fin_jobs:
+        if(job['status'] == 'open'):
+            names_jobs.append(job['name'])
+            ids_jobs.append(job['id'])
+    ids_jobs = list(set(ids_jobs))
+    names_jobs = list(set(names_jobs))
+    return {"jobNames" : names_jobs}
 
 # @app.route('/getDataJobs')
 # def get_Data_jobs():
@@ -122,5 +207,6 @@ def get_data_application():
 #     fin = eval(l)
 
 
-app.debug = True
-app.run(host='localhost', port=5000)
+# app.debug = True
+if __name__ == "__main__":
+    app.run(debug=True, host='localhost', port=5000)
